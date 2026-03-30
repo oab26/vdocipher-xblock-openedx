@@ -17,7 +17,7 @@ function VdoCipherXBlock(runtime, element) {
         document.head.appendChild(script);
     }
 
-    // Load quiz state first
+    // Step 1: Load quiz state FIRST, then load video
     $.ajax({
         type: 'POST', url: quizStateUrl,
         data: JSON.stringify({}), contentType: 'application/json',
@@ -26,40 +26,50 @@ function VdoCipherXBlock(runtime, element) {
                 timemap = JSON.parse(state.timemap || '{}');
                 var answers = JSON.parse(state.answers || '{}');
                 for (var ts in answers) { answeredQuizzes[ts] = true; }
-            } catch(e) {}
-        }
-    });
-
-    // Fetch OTP and embed player
-    $.ajax({
-        type: 'POST', url: otpUrl,
-        data: JSON.stringify({}), contentType: 'application/json',
-        success: function(data) {
-            if (data.error) {
-                $(element).find('#vdo-error').text(data.error).show();
-                $(element).find('.vdo-loading').hide();
-                return;
+                console.log('VdoCipher quiz timemap loaded:', Object.keys(timemap).length, 'questions');
+            } catch(e) {
+                console.warn('VdoCipher quiz state parse error:', e);
             }
-
-            var container = $(element).find('#vdo-container')[0];
-            var iframe = document.createElement('iframe');
-            iframe.src = 'https://player.vdocipher.com/v2/?otp=' +
-                         encodeURIComponent(data.otp) +
-                         '&playbackInfo=' + encodeURIComponent(data.playbackInfo);
-            iframe.setAttribute('allow', 'encrypted-media');
-            iframe.setAttribute('allowfullscreen', 'true');
-            $(element).find('.vdo-loading').hide();
-            container.appendChild(iframe);
-
-            iframe.addEventListener('load', function() {
-                waitForApi(function() { initPlayer(iframe); });
-            });
+            // Step 2: Now load the video
+            loadVideo();
         },
         error: function() {
-            $(element).find('#vdo-error').text('Failed to load video').show();
-            $(element).find('.vdo-loading').hide();
+            // Load video even if quiz state fails
+            loadVideo();
         }
     });
+
+    function loadVideo() {
+        $.ajax({
+            type: 'POST', url: otpUrl,
+            data: JSON.stringify({}), contentType: 'application/json',
+            success: function(data) {
+                if (data.error) {
+                    $(element).find('#vdo-error').text(data.error).show();
+                    $(element).find('.vdo-loading').hide();
+                    return;
+                }
+
+                var container = $(element).find('#vdo-container')[0];
+                var iframe = document.createElement('iframe');
+                iframe.src = 'https://player.vdocipher.com/v2/?otp=' +
+                             encodeURIComponent(data.otp) +
+                             '&playbackInfo=' + encodeURIComponent(data.playbackInfo);
+                iframe.setAttribute('allow', 'encrypted-media');
+                iframe.setAttribute('allowfullscreen', 'true');
+                $(element).find('.vdo-loading').hide();
+                container.appendChild(iframe);
+
+                iframe.addEventListener('load', function() {
+                    waitForApi(function() { initPlayer(iframe); });
+                });
+            },
+            error: function() {
+                $(element).find('#vdo-error').text('Failed to load video').show();
+                $(element).find('.vdo-loading').hide();
+            }
+        });
+    }
 
     function waitForApi(callback) {
         if (typeof VdoPlayer !== 'undefined') {
@@ -72,6 +82,7 @@ function VdoCipherXBlock(runtime, element) {
     function initPlayer(iframe) {
         try {
             var player = VdoPlayer.getInstance(iframe);
+            var lastCheckedSecond = -1;
 
             player.video.addEventListener('timeupdate', function() {
                 Promise.all([
@@ -82,15 +93,19 @@ function VdoCipherXBlock(runtime, element) {
                     var duration = values[1];
                     var timeInt = Math.floor(currentTime);
 
-                    // Check for quiz at this timestamp
-                    if (timemap[String(timeInt)] && !answeredQuizzes[String(timeInt)] && !quizShowing) {
-                        quizShowing = true;
-                        player.video.pause().then(function() {
-                            showQuiz(timemap[String(timeInt)], String(timeInt), player);
-                        });
+                    // Check for quiz — only check each second once
+                    if (timeInt !== lastCheckedSecond) {
+                        lastCheckedSecond = timeInt;
+                        var timeStr = String(timeInt);
+                        if (timemap[timeStr] && !answeredQuizzes[timeStr] && !quizShowing) {
+                            quizShowing = true;
+                            player.video.pause().then(function() {
+                                showQuiz(timemap[timeStr], timeStr, player);
+                            });
+                        }
                     }
 
-                    // Report progress
+                    // Report progress periodically
                     var now = Date.now();
                     if (now - lastReportTime < REPORT_INTERVAL) return;
                     lastReportTime = now;
@@ -128,11 +143,8 @@ function VdoCipherXBlock(runtime, element) {
         overlay.find('.quiz-option').on('click', function() {
             var selected = parseInt($(this).data('idx'));
             overlay.find('.quiz-option').off('click').css('pointer-events', 'none');
-
-            // Highlight selected
             $(this).addClass('selected');
 
-            // Submit answer
             $.ajax({
                 type: 'POST', url: quizUrl,
                 data: JSON.stringify({ timestamp: timestamp, selected: selected }),
@@ -140,28 +152,25 @@ function VdoCipherXBlock(runtime, element) {
                 success: function(result) {
                     answeredQuizzes[timestamp] = true;
 
-                    // Show feedback
                     var feedback = overlay.find('.quiz-feedback');
                     if (result.correct) {
                         feedback.html('<span class="correct">&#10003; Correct!</span>').show();
                         overlay.find('.quiz-option[data-idx="' + selected + '"]').addClass('correct');
                     } else {
-                        feedback.html('<span class="incorrect">&#10007; Incorrect. The correct answer is: ' +
+                        feedback.html('<span class="incorrect">&#10007; Incorrect. Answer: ' +
                             escapeHtml(question.opts[result.correct_answer]) + '</span>').show();
                         overlay.find('.quiz-option[data-idx="' + selected + '"]').addClass('incorrect');
                         overlay.find('.quiz-option[data-idx="' + result.correct_answer + '"]').addClass('correct');
                     }
 
-                    // Update score display
                     $(element).find('.quiz-score-text').text('Quiz: ' + result.score + '/' + result.total).show();
 
-                    // Resume video after 2 seconds
                     setTimeout(function() {
                         overlay.fadeOut(300, function() {
                             quizShowing = false;
                             player.video.play();
                         });
-                    }, 2000);
+                    }, 2500);
                 }
             });
         });

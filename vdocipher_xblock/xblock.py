@@ -63,19 +63,12 @@ class VdoCipherXBlock(XBlock):
     def student_view(self, context=None):
         """Render the video player for students."""
         html = self.resource_string('static/html/student.html')
-        # Escape braces in timemap/quiz_answers for .format()
-        safe_timemap = self.timemap.replace('{', '{{').replace('}', '}}')
-        safe_answers = self.quiz_answers.replace('{', '{{').replace('}', '}}')
         frag = Fragment(html.format(
             display_name=self.display_name,
             video_id=self.video_id,
             completion_percentage=self.completion_percentage,
             is_completed='true' if self.is_completed else 'false',
             completed_display='inline' if self.is_completed else 'none',
-            timemap=self.timemap,
-            quiz_answers=self.quiz_answers,
-            quiz_score=self.quiz_score,
-            quiz_total=self.quiz_total,
         ))
         frag.add_css(self.resource_string('static/css/vdocipher.css'))
         frag.add_javascript(self.resource_string('static/js/vdocipher.js'))
@@ -85,11 +78,12 @@ class VdoCipherXBlock(XBlock):
     def studio_view(self, context=None):
         """Render the config form for instructors in Studio."""
         html = self.resource_string('static/html/studio.html')
+        # Replace timemap separately to avoid .format() brace conflicts
+        html = html.replace('__TIMEMAP__', self.timemap)
         frag = Fragment(html.format(
             video_id=self.video_id,
             display_name=self.display_name,
             completion_threshold=self.completion_threshold,
-            timemap=self.timemap,
         ))
         frag.add_javascript('''
             function StudioEditableXBlockMixin(runtime, element) {

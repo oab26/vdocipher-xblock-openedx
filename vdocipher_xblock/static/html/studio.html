@@ -25,7 +25,7 @@
         <label style="display:block;font-weight:600;margin-bottom:4px;">In-Video Quiz Questions (JSON)</label>
         <textarea id="timemap" rows="8"
                style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:monospace;"
-               placeholder='{{"30": {{"q": "What is the primary function?", "opts": ["Option A", "Option B", "Option C", "Option D"], "ans": 0}}, "60": {{"q": "Which technique is shown?", "opts": ["Suturing", "Cauterization", "Debridement"], "ans": 2}}}}'>{timemap}</textarea>
+               placeholder='Example: see format below'>__TIMEMAP__</textarea>
         <small style="color:#6b7280;display:block;margin-top:4px;">
             Format: Timestamp (seconds) mapped to question object.<br>
             Each question has: <code>q</code> (question text), <code>opts</code> (answer options array), <code>ans</code> (correct answer index, 0-based).<br>
