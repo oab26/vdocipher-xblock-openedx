@@ -78,13 +78,12 @@ class VdoCipherXBlock(XBlock):
     def studio_view(self, context=None):
         """Render the config form for instructors in Studio."""
         html = self.resource_string('static/html/studio.html')
-        # Replace timemap separately to avoid .format() brace conflicts
-        html = html.replace('__TIMEMAP__', self.timemap)
-        frag = Fragment(html.format(
-            video_id=self.video_id,
-            display_name=self.display_name,
-            completion_threshold=self.completion_threshold,
-        ))
+        # Use manual replacement to avoid .format() brace conflicts with JSON
+        html = html.replace('__VIDEO_ID__', self.video_id or '')
+        html = html.replace('__DISPLAY_NAME__', self.display_name or 'Video')
+        html = html.replace('__COMPLETION_THRESHOLD__', str(self.completion_threshold))
+        html = html.replace('__TIMEMAP__', self.timemap or '{}')
+        frag = Fragment(html)
         frag.add_javascript('''
             function StudioEditableXBlockMixin(runtime, element) {
                 $(element).find('.save-button').on('click', function() {

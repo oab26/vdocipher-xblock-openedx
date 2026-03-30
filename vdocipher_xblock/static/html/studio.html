@@ -3,20 +3,20 @@
 
     <div style="margin-bottom:15px;">
         <label style="display:block;font-weight:600;margin-bottom:4px;">Video ID</label>
-        <input type="text" id="video_id" value="{video_id}" placeholder="Paste VdoCipher video ID"
+        <input type="text" id="video_id" value="__VIDEO_ID__" placeholder="Paste VdoCipher video ID"
                style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;" />
         <small style="color:#6b7280;display:block;margin-top:4px;">Find this in your VdoCipher dashboard under the video details.</small>
     </div>
 
     <div style="margin-bottom:15px;">
         <label style="display:block;font-weight:600;margin-bottom:4px;">Display Name</label>
-        <input type="text" id="display_name" value="{display_name}"
+        <input type="text" id="display_name" value="__DISPLAY_NAME__"
                style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;" />
     </div>
 
     <div style="margin-bottom:15px;">
         <label style="display:block;font-weight:600;margin-bottom:4px;">Completion Threshold (%)</label>
-        <input type="number" id="completion_threshold" value="{completion_threshold}" min="0" max="100"
+        <input type="number" id="completion_threshold" value="__COMPLETION_THRESHOLD__" min="0" max="100"
                style="width:120px;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;" />
         <small style="color:#6b7280;display:block;margin-top:4px;">Student must watch this percentage to mark video as complete.</small>
     </div>
@@ -25,11 +25,11 @@
         <label style="display:block;font-weight:600;margin-bottom:4px;">In-Video Quiz Questions (JSON)</label>
         <textarea id="timemap" rows="8"
                style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:monospace;"
-               placeholder='Example: see format below'>__TIMEMAP__</textarea>
+               placeholder='{"10": {"q": "Question?", "opts": ["A","B","C","D"], "ans": 0}}'>__TIMEMAP__</textarea>
         <small style="color:#6b7280;display:block;margin-top:4px;">
-            Format: Timestamp (seconds) mapped to question object.<br>
-            Each question has: <code>q</code> (question text), <code>opts</code> (answer options array), <code>ans</code> (correct answer index, 0-based).<br>
-            Example: At 30 seconds, show a question with 4 options where the first option (index 0) is correct.
+            Format: Timestamp (seconds) mapped to question.<br>
+            <code>q</code> = question text, <code>opts</code> = answer options, <code>ans</code> = correct answer index (0-based).<br>
+            Leave empty or <code>{}</code> for no quizzes.
         </small>
     </div>
 
