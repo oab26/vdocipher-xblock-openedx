@@ -1,0 +1,28 @@
+<div class="vdocipher-studio-wrapper" style="padding:20px;">
+    <h3 style="margin-bottom:20px;">VdoCipher Video Settings</h3>
+
+    <div style="margin-bottom:15px;">
+        <label style="display:block;font-weight:600;margin-bottom:4px;">Video ID</label>
+        <input type="text" id="video_id" value="{video_id}" placeholder="Paste VdoCipher video ID"
+               style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;" />
+        <small style="color:#6b7280;display:block;margin-top:4px;">Find this in your VdoCipher dashboard under the video details.</small>
+    </div>
+
+    <div style="margin-bottom:15px;">
+        <label style="display:block;font-weight:600;margin-bottom:4px;">Display Name</label>
+        <input type="text" id="display_name" value="{display_name}"
+               style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;" />
+    </div>
+
+    <div style="margin-bottom:20px;">
+        <label style="display:block;font-weight:600;margin-bottom:4px;">Completion Threshold (%)</label>
+        <input type="number" id="completion_threshold" value="{completion_threshold}" min="0" max="100"
+               style="width:120px;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;" />
+        <small style="color:#6b7280;display:block;margin-top:4px;">Student must watch this percentage to mark video as complete.</small>
+    </div>
+
+    <div style="display:flex;gap:10px;">
+        <button class="save-button action-primary" style="padding:8px 24px;background:#490B8A;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Save</button>
+        <button class="cancel-button" style="padding:8px 24px;background:#e5e7eb;color:#374151;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Cancel</button>
+    </div>
+</div>

@@ -1,0 +1,210 @@
+"""VdoCipher DRM video player XBlock."""
+
+import json
+import logging
+import pkg_resources
+import requests
+
+from django.conf import settings
+from xblock.core import XBlock
+from xblock.fields import String, Integer, Boolean, Scope
+from xblock.fragment import Fragment
+
+log = logging.getLogger(__name__)
+
+VDOCIPHER_OTP_URL = 'https://dev.vdocipher.com/api/videos/{video_id}/otp'
+
+
+class VdoCipherXBlock(XBlock):
+    """Embeds VdoCipher DRM-protected video with completion tracking."""
+
+    display_name = String(
+        display_name="Display Name",
+        scope=Scope.content,
+        default="Video",
+        help="Name shown to students"
+    )
+    video_id = String(
+        display_name="VdoCipher Video ID",
+        scope=Scope.content,
+        default='',
+        help="Video ID from your VdoCipher dashboard"
+    )
+    completion_threshold = Integer(
+        display_name="Completion Threshold (%)",
+        scope=Scope.content,
+        default=90,
+        help="Percentage watched to mark as complete"
+    )
+
+    # Per-student state (auto-persisted)
+    watch_time = Integer(scope=Scope.user_state, default=0)
+    completion_percentage = Integer(scope=Scope.user_state, default=0)
+    is_completed = Boolean(scope=Scope.user_state, default=False)
+
+    has_score = True
+
+    def resource_string(self, path):
+        data = pkg_resources.resource_string(__name__, path)
+        return data.decode('utf-8')
+
+    def student_view(self, context=None):
+        """Render the video player for students."""
+        html = self.resource_string('static/html/student.html')
+        frag = Fragment(html.format(
+            display_name=self.display_name,
+            video_id=self.video_id,
+            completion_percentage=self.completion_percentage,
+            is_completed='true' if self.is_completed else 'false',
+            completed_display='inline' if self.is_completed else 'none',
+        ))
+        frag.add_css(self.resource_string('static/css/vdocipher.css'))
+        frag.add_javascript(self.resource_string('static/js/vdocipher.js'))
+        frag.initialize_js('VdoCipherXBlock')
+        return frag
+
+    def studio_view(self, context=None):
+        """Render the config form for instructors in Studio."""
+        html = self.resource_string('static/html/studio.html')
+        frag = Fragment(html.format(
+            video_id=self.video_id,
+            display_name=self.display_name,
+            completion_threshold=self.completion_threshold,
+        ))
+        frag.add_javascript('''
+            function StudioEditableXBlockMixin(runtime, element) {
+                $(element).find('.save-button').on('click', function() {
+                    var handlerUrl = runtime.handlerUrl(element, 'studio_submit');
+                    $.post(handlerUrl, JSON.stringify({
+                        video_id: $(element).find('#video_id').val(),
+                        display_name: $(element).find('#display_name').val(),
+                        completion_threshold: $(element).find('#completion_threshold').val()
+                    }), function() {
+                        runtime.notify('save', {state: 'end'});
+                    });
+                });
+                $(element).find('.cancel-button').on('click', function() {
+                    runtime.notify('cancel', {});
+                });
+            }
+        ''')
+        frag.initialize_js('StudioEditableXBlockMixin')
+        return frag
+
+    @XBlock.json_handler
+    def studio_submit(self, data, suffix=''):
+        """Save studio settings."""
+        self.video_id = data.get('video_id', '').strip()
+        self.display_name = data.get('display_name', 'Video').strip()
+        self.completion_threshold = int(data.get('completion_threshold', 90))
+        return {'result': 'success'}
+
+    @XBlock.json_handler
+    def get_otp(self, data, suffix=''):
+        """Generate VdoCipher OTP for secure playback."""
+        if not self.video_id:
+            return {'error': 'No video configured'}
+
+        api_secret = getattr(settings, 'VDOCIPHER_API_SECRET', '')
+        if not api_secret:
+            return {'error': 'VdoCipher API secret not configured'}
+
+        # Get student info for watermark
+        email = 'student@vai.edu'
+        name = 'Student'
+        user_id = ''
+
+        try:
+            user_service = self.runtime.service(self, 'user')
+            if user_service:
+                user = user_service.get_current_user()
+                if hasattr(user, 'emails') and user.emails:
+                    email = user.emails[0]
+                if hasattr(user, 'full_name') and user.full_name:
+                    name = user.full_name
+                if hasattr(user, 'opt_attrs'):
+                    user_id = str(user.opt_attrs.get('edx-platform.user_id', ''))
+        except Exception as e:
+            log.warning('Could not get user info for VdoCipher: %s', e)
+
+        # Build watermark annotation (double-encoded JSON string)
+        annotate = json.dumps([{
+            'type': 'rtext',
+            'text': '{} - {}'.format(name, email),
+            'alpha': '0.50',
+            'color': '0x490B8A',
+            'size': '12',
+            'interval': '5000',
+        }])
+
+        try:
+            response = requests.post(
+                VDOCIPHER_OTP_URL.format(video_id=self.video_id),
+                headers={
+                    'Authorization': 'Apisecret {}'.format(api_secret),
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                json={
+                    'ttl': 300,
+                    'annotate': annotate,
+                },
+                timeout=10,
+            )
+
+            if user_id:
+                body = response.json() if response.status_code == 200 else {}
+                # Retry with userId if first call worked
+                if response.status_code == 200:
+                    result = response.json()
+                    return {
+                        'otp': result.get('otp', ''),
+                        'playbackInfo': result.get('playbackInfo', ''),
+                    }
+
+            if response.status_code != 200:
+                log.error('VdoCipher OTP error: %s %s', response.status_code, response.text[:200])
+                return {'error': 'Failed to generate video token'}
+
+            result = response.json()
+            return {
+                'otp': result.get('otp', ''),
+                'playbackInfo': result.get('playbackInfo', ''),
+            }
+
+        except requests.exceptions.Timeout:
+            return {'error': 'Video service timeout'}
+        except Exception as e:
+            log.error('VdoCipher OTP exception: %s', e)
+            return {'error': 'Video service error'}
+
+    @XBlock.json_handler
+    def video_progress(self, data, suffix=''):
+        """Handle video progress from frontend JavaScript."""
+        watch_time = data.get('watch_time', 0)
+        total_duration = max(data.get('total_duration', 1), 1)
+        percentage = min(int((watch_time / total_duration) * 100), 100)
+
+        self.watch_time = watch_time
+        self.completion_percentage = percentage
+
+        if percentage >= self.completion_threshold and not self.is_completed:
+            self.is_completed = True
+            self.runtime.publish(self, 'completion', {'completion': 1.0})
+            self.runtime.publish(self, 'grade', {
+                'value': 1.0,
+                'max_value': 1.0,
+            })
+            log.info('VdoCipher video completed: video_id=%s, percentage=%s', self.video_id, percentage)
+
+        return {
+            'status': 'success',
+            'percentage': self.completion_percentage,
+            'completed': self.is_completed,
+        }
+
+    @staticmethod
+    def workbench_scenarios():
+        return [
+            ("VdoCipherXBlock", "<vdocipher video_id='test123' />"),
+        ]
