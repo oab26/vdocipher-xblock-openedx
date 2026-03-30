@@ -38,10 +38,21 @@ class VdoCipherXBlock(XBlock):
         help="Percentage watched to mark as complete"
     )
 
+    # Quiz configuration (set by instructor)
+    timemap = String(
+        display_name="Quiz Questions (JSON)",
+        scope=Scope.content,
+        default='{}',
+        help='JSON mapping timestamps to questions: {"30": {"q": "What is X?", "opts": ["A","B","C","D"], "ans": 0}, "60": {...}}'
+    )
+
     # Per-student state (auto-persisted)
     watch_time = Integer(scope=Scope.user_state, default=0)
     completion_percentage = Integer(scope=Scope.user_state, default=0)
     is_completed = Boolean(scope=Scope.user_state, default=False)
+    quiz_answers = String(scope=Scope.user_state, default='{}')
+    quiz_score = Integer(scope=Scope.user_state, default=0)
+    quiz_total = Integer(scope=Scope.user_state, default=0)
 
     has_score = True
 
@@ -52,12 +63,19 @@ class VdoCipherXBlock(XBlock):
     def student_view(self, context=None):
         """Render the video player for students."""
         html = self.resource_string('static/html/student.html')
+        # Escape braces in timemap/quiz_answers for .format()
+        safe_timemap = self.timemap.replace('{', '{{').replace('}', '}}')
+        safe_answers = self.quiz_answers.replace('{', '{{').replace('}', '}}')
         frag = Fragment(html.format(
             display_name=self.display_name,
             video_id=self.video_id,
             completion_percentage=self.completion_percentage,
             is_completed='true' if self.is_completed else 'false',
             completed_display='inline' if self.is_completed else 'none',
+            timemap=self.timemap,
+            quiz_answers=self.quiz_answers,
+            quiz_score=self.quiz_score,
+            quiz_total=self.quiz_total,
         ))
         frag.add_css(self.resource_string('static/css/vdocipher.css'))
         frag.add_javascript(self.resource_string('static/js/vdocipher.js'))
@@ -71,6 +89,7 @@ class VdoCipherXBlock(XBlock):
             video_id=self.video_id,
             display_name=self.display_name,
             completion_threshold=self.completion_threshold,
+            timemap=self.timemap,
         ))
         frag.add_javascript('''
             function StudioEditableXBlockMixin(runtime, element) {
@@ -79,7 +98,8 @@ class VdoCipherXBlock(XBlock):
                     $.post(handlerUrl, JSON.stringify({
                         video_id: $(element).find('#video_id').val(),
                         display_name: $(element).find('#display_name').val(),
-                        completion_threshold: $(element).find('#completion_threshold').val()
+                        completion_threshold: $(element).find('#completion_threshold').val(),
+                        timemap: $(element).find('#timemap').val()
                     }), function() {
                         runtime.notify('save', {state: 'end'});
                     });
@@ -98,6 +118,12 @@ class VdoCipherXBlock(XBlock):
         self.video_id = data.get('video_id', '').strip()
         self.display_name = data.get('display_name', 'Video').strip()
         self.completion_threshold = int(data.get('completion_threshold', 90))
+        timemap_str = data.get('timemap', '{}').strip()
+        try:
+            json.loads(timemap_str)  # Validate JSON
+            self.timemap = timemap_str
+        except json.JSONDecodeError:
+            return {'result': 'error', 'message': 'Invalid JSON in quiz questions'}
         return {'result': 'success'}
 
     @XBlock.json_handler
@@ -216,6 +242,65 @@ class VdoCipherXBlock(XBlock):
             'status': 'success',
             'percentage': self.completion_percentage,
             'completed': self.is_completed,
+        }
+
+    @XBlock.json_handler
+    def submit_quiz(self, data, suffix=''):
+        """Handle quiz answer submission from frontend."""
+        timestamp = str(data.get('timestamp', ''))
+        selected = data.get('selected', -1)
+
+        try:
+            timemap = json.loads(self.timemap)
+        except json.JSONDecodeError:
+            return {'error': 'Invalid quiz configuration'}
+
+        if timestamp not in timemap:
+            return {'error': 'Unknown quiz timestamp'}
+
+        question = timemap[timestamp]
+        correct_answer = question.get('ans', -1)
+        is_correct = (selected == correct_answer)
+
+        # Store answer
+        answers = json.loads(self.quiz_answers or '{}')
+        answers[timestamp] = {
+            'selected': selected,
+            'correct': is_correct,
+        }
+        self.quiz_answers = json.dumps(answers)
+
+        # Calculate quiz score
+        total_questions = len(timemap)
+        correct_count = sum(1 for a in answers.values() if a.get('correct'))
+        self.quiz_score = correct_count
+        self.quiz_total = total_questions
+
+        # Update grade: 50% video completion + 50% quiz score
+        video_grade = 1.0 if self.is_completed else (self.completion_percentage / 100.0)
+        quiz_grade = correct_count / max(total_questions, 1)
+        combined = (video_grade * 0.5) + (quiz_grade * 0.5)
+
+        self.runtime.publish(self, 'grade', {
+            'value': round(combined, 2),
+            'max_value': 1.0,
+        })
+
+        return {
+            'correct': is_correct,
+            'correct_answer': correct_answer,
+            'score': self.quiz_score,
+            'total': self.quiz_total,
+        }
+
+    @XBlock.json_handler
+    def get_quiz_state(self, data, suffix=''):
+        """Return current quiz state for the student."""
+        return {
+            'timemap': self.timemap,
+            'answers': self.quiz_answers,
+            'score': self.quiz_score,
+            'total': self.quiz_total,
         }
 
     @staticmethod

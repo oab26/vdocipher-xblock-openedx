@@ -14,11 +14,23 @@
                style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;" />
     </div>
 
-    <div style="margin-bottom:20px;">
+    <div style="margin-bottom:15px;">
         <label style="display:block;font-weight:600;margin-bottom:4px;">Completion Threshold (%)</label>
         <input type="number" id="completion_threshold" value="{completion_threshold}" min="0" max="100"
                style="width:120px;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;" />
         <small style="color:#6b7280;display:block;margin-top:4px;">Student must watch this percentage to mark video as complete.</small>
+    </div>
+
+    <div style="margin-bottom:20px;">
+        <label style="display:block;font-weight:600;margin-bottom:4px;">In-Video Quiz Questions (JSON)</label>
+        <textarea id="timemap" rows="8"
+               style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:monospace;"
+               placeholder='{{"30": {{"q": "What is the primary function?", "opts": ["Option A", "Option B", "Option C", "Option D"], "ans": 0}}, "60": {{"q": "Which technique is shown?", "opts": ["Suturing", "Cauterization", "Debridement"], "ans": 2}}}}'>{timemap}</textarea>
+        <small style="color:#6b7280;display:block;margin-top:4px;">
+            Format: Timestamp (seconds) mapped to question object.<br>
+            Each question has: <code>q</code> (question text), <code>opts</code> (answer options array), <code>ans</code> (correct answer index, 0-based).<br>
+            Example: At 30 seconds, show a question with 4 options where the first option (index 0) is correct.
+        </small>
     </div>
 
     <div style="display:flex;gap:10px;">

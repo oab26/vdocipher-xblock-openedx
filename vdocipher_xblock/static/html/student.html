@@ -3,8 +3,11 @@
 
     <div class="vdo-error" id="vdo-error" style="display:none;"></div>
 
-    <div class="vdo-container" id="vdo-container" data-video-id="{video_id}">
-        <div class="vdo-loading">Loading video...</div>
+    <div class="vdo-player-area">
+        <div class="vdo-container" id="vdo-container" data-video-id="{video_id}">
+            <div class="vdo-loading">Loading video...</div>
+        </div>
+        <div class="quiz-overlay" id="quiz-overlay" style="display:none;"></div>
     </div>
 
     <div class="vdo-progress-bar">
@@ -12,6 +15,7 @@
     </div>
     <div class="vdo-progress-info">
         <span class="vdo-progress-text">{completion_percentage}% watched</span>
+        <span class="quiz-score-text" style="display:{completed_display}"></span>
         <span class="vdo-completed-badge" style="display:{completed_display}">&#10003; Complete</span>
     </div>
 </div>
