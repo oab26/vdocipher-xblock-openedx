@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 VDOCIPHER_OTP_URL = 'https://dev.vdocipher.com/api/videos/{video_id}/otp'
 
 
+@XBlock.wants('user')
 class VdoCipherXBlock(XBlock):
     """Embeds VdoCipher DRM-protected video with completion tracking."""
 
@@ -117,15 +118,29 @@ class VdoCipherXBlock(XBlock):
         try:
             user_service = self.runtime.service(self, 'user')
             if user_service:
-                user = user_service.get_current_user()
-                if hasattr(user, 'emails') and user.emails:
-                    email = user.emails[0]
-                if hasattr(user, 'full_name') and user.full_name:
-                    name = user.full_name
-                if hasattr(user, 'opt_attrs'):
-                    user_id = str(user.opt_attrs.get('edx-platform.user_id', ''))
+                xb_user = user_service.get_current_user()
+
+                # Only trust user data if authenticated
+                is_authenticated = xb_user.opt_attrs.get(
+                    'edx-platform.is_authenticated', False
+                )
+
+                if is_authenticated:
+                    if xb_user.emails and len(xb_user.emails) > 0:
+                        email = xb_user.emails[0]
+                    if xb_user.full_name:
+                        name = xb_user.full_name
+                    elif xb_user.opt_attrs.get('edx-platform.username'):
+                        name = xb_user.opt_attrs['edx-platform.username']
+                    user_id = str(
+                        xb_user.opt_attrs.get('edx-platform.user_id', '')
+                    )
+                else:
+                    log.info('VdoCipher: user not authenticated, using fallbacks')
         except Exception as e:
             log.warning('Could not get user info for VdoCipher: %s', e)
+
+        log.info('VdoCipher OTP: name=%s, email=%s, user_id=%s', name, email, user_id)
 
         # Build watermark annotation (double-encoded JSON string)
         annotate = json.dumps([{
