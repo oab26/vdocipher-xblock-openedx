@@ -85,24 +85,22 @@ function VdoCipherXBlock(runtime, element) {
             var player = VdoPlayer.getInstance(iframe);
             var lastCheckedSecond = -1;
             var previousTime = 0;
-
-            // load_video — fire once when player is ready
-            player.video.duration.then(function(dur) {
-                trackEvent('load_video', { current_time: 0, duration: Math.round(dur) });
-            }).catch(function() {});
+            var hasFiredLoad = false;
+            var videoDuration = 0;
 
             // play_video
             player.video.addEventListener('play', function() {
                 Promise.all([player.video.currentTime, player.video.duration]).then(function(v) {
+                    videoDuration = v[1];
                     trackEvent('play_video', { current_time: Math.round(v[0]), duration: Math.round(v[1]) });
-                });
+                }).catch(function() {});
             });
 
             // pause_video
             player.video.addEventListener('pause', function() {
                 Promise.all([player.video.currentTime, player.video.duration]).then(function(v) {
                     trackEvent('pause_video', { current_time: Math.round(v[0]), duration: Math.round(v[1]) });
-                });
+                }).catch(function() {});
             });
 
             // seek_video
@@ -113,7 +111,7 @@ function VdoCipherXBlock(runtime, element) {
                         new_time: Math.round(v[0]),
                         duration: Math.round(v[1])
                     });
-                });
+                }).catch(function() {});
             });
 
             player.video.addEventListener('timeupdate', function() {
@@ -124,6 +122,14 @@ function VdoCipherXBlock(runtime, element) {
                     var currentTime = values[0];
                     var duration = values[1];
                     previousTime = currentTime;
+                    videoDuration = duration;
+
+                    // load_video — fire once on first timeupdate
+                    if (!hasFiredLoad && duration > 0) {
+                        hasFiredLoad = true;
+                        trackEvent('load_video', { current_time: 0, duration: Math.round(duration) });
+                    }
+
                     var timeInt = Math.floor(currentTime);
 
                     // Check for quiz — only check each second once
