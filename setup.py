@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='vdocipher-xblock',
-    version='1.1.1',
+    version='1.1.2',
     description='VdoCipher DRM video player XBlock for Open edX',
     author='VAI',
     packages=find_packages(),

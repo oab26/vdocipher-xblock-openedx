@@ -300,8 +300,11 @@ class VdoCipherXBlock(XBlock):
         if event_type not in ALLOWED_EVENTS:
             return {'status': 'ignored'}
 
+        # Use the XBlock usage key so Aspects can JOIN with dim_course_blocks
+        block_id = str(self.scope_ids.usage_id) if hasattr(self, 'scope_ids') else self.video_id
+
         event_data = {
-            'id': self.video_id,
+            'id': block_id,
             'code': 'vdocipher',
             'currentTime': data.get('current_time', 0),
             'duration': data.get('duration', 0),
