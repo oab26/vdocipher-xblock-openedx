@@ -3,6 +3,7 @@ function VdoCipherXBlock(runtime, element) {
     var otpUrl = runtime.handlerUrl(element, 'get_otp');
     var quizUrl = runtime.handlerUrl(element, 'submit_quiz');
     var quizStateUrl = runtime.handlerUrl(element, 'get_quiz_state');
+    var trackUrl = runtime.handlerUrl(element, 'track_event');
     var lastReportTime = 0;
     var REPORT_INTERVAL = 30000;
     var timemap = {};
@@ -83,6 +84,37 @@ function VdoCipherXBlock(runtime, element) {
         try {
             var player = VdoPlayer.getInstance(iframe);
             var lastCheckedSecond = -1;
+            var previousTime = 0;
+
+            // load_video — fire once when player is ready
+            player.video.duration.then(function(dur) {
+                trackEvent('load_video', { current_time: 0, duration: Math.round(dur) });
+            }).catch(function() {});
+
+            // play_video
+            player.video.addEventListener('play', function() {
+                Promise.all([player.video.currentTime, player.video.duration]).then(function(v) {
+                    trackEvent('play_video', { current_time: Math.round(v[0]), duration: Math.round(v[1]) });
+                });
+            });
+
+            // pause_video
+            player.video.addEventListener('pause', function() {
+                Promise.all([player.video.currentTime, player.video.duration]).then(function(v) {
+                    trackEvent('pause_video', { current_time: Math.round(v[0]), duration: Math.round(v[1]) });
+                });
+            });
+
+            // seek_video
+            player.video.addEventListener('seeked', function() {
+                Promise.all([player.video.currentTime, player.video.duration]).then(function(v) {
+                    trackEvent('seek_video', {
+                        old_time: Math.round(previousTime),
+                        new_time: Math.round(v[0]),
+                        duration: Math.round(v[1])
+                    });
+                });
+            });
 
             player.video.addEventListener('timeupdate', function() {
                 Promise.all([
@@ -91,6 +123,7 @@ function VdoCipherXBlock(runtime, element) {
                 ]).then(function(values) {
                     var currentTime = values[0];
                     var duration = values[1];
+                    previousTime = currentTime;
                     var timeInt = Math.floor(currentTime);
 
                     // Check for quiz — only check each second once
@@ -118,6 +151,7 @@ function VdoCipherXBlock(runtime, element) {
             player.video.addEventListener('ended', function() {
                 player.video.duration.then(function(duration) {
                     reportProgress(Math.round(duration), Math.round(duration));
+                    trackEvent('stop_video', { current_time: Math.round(duration), duration: Math.round(duration) });
                 }).catch(function() {});
             });
 
@@ -173,6 +207,16 @@ function VdoCipherXBlock(runtime, element) {
                     }, 2500);
                 }
             });
+        });
+    }
+
+    function trackEvent(eventType, extraData) {
+        var payload = { event_type: eventType };
+        for (var key in extraData) { payload[key] = extraData[key]; }
+        $.ajax({
+            type: 'POST', url: trackUrl,
+            data: JSON.stringify(payload),
+            contentType: 'application/json'
         });
     }
 

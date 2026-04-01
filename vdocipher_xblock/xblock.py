@@ -287,6 +287,38 @@ class VdoCipherXBlock(XBlock):
         }
 
     @XBlock.json_handler
+    def track_event(self, data, suffix=''):
+        """Emit standard Open edX video tracking events for Aspects analytics."""
+        event_type = data.get('event_type', '')
+
+        ALLOWED_EVENTS = {
+            'play_video', 'pause_video', 'seek_video',
+            'stop_video', 'load_video', 'speed_change_video',
+            'complete_video',
+        }
+
+        if event_type not in ALLOWED_EVENTS:
+            return {'status': 'ignored'}
+
+        event_data = {
+            'id': self.video_id,
+            'code': 'vdocipher',
+            'currentTime': data.get('current_time', 0),
+            'duration': data.get('duration', 0),
+        }
+
+        if event_type == 'seek_video':
+            event_data['old_time'] = data.get('old_time', 0)
+            event_data['new_time'] = data.get('new_time', 0)
+
+        if event_type == 'speed_change_video':
+            event_data['old_speed'] = data.get('old_speed', '1.0')
+            event_data['new_speed'] = data.get('new_speed', '1.0')
+
+        self.runtime.publish(self, event_type, event_data)
+        return {'status': 'ok'}
+
+    @XBlock.json_handler
     def get_quiz_state(self, data, suffix=''):
         """Return current quiz state for the student."""
         return {
