@@ -171,6 +171,18 @@ class VdoCipherXBlock(XBlock):
             'interval': '5000',
         }])
 
+        otp_params = {
+            'ttl': 300,
+            'annotate': annotate,
+        }
+
+        # Offline download support (iOS native app)
+        if data.get('offline'):
+            otp_params['licenseRules'] = json.dumps({
+                'canPersist': True,
+                'rentalDuration': 604800,  # 7 days in seconds
+            })
+
         try:
             response = requests.post(
                 VDOCIPHER_OTP_URL.format(video_id=self.video_id),
@@ -179,10 +191,7 @@ class VdoCipherXBlock(XBlock):
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
-                json={
-                    'ttl': 300,
-                    'annotate': annotate,
-                },
+                json=otp_params,
                 timeout=10,
             )
 
@@ -204,6 +213,7 @@ class VdoCipherXBlock(XBlock):
             return {
                 'otp': result.get('otp', ''),
                 'playbackInfo': result.get('playbackInfo', ''),
+                'videoId': self.video_id,
             }
 
         except requests.exceptions.Timeout:
