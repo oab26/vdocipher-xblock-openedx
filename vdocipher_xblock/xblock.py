@@ -56,6 +56,11 @@ class VdoCipherXBlock(XBlock):
 
     has_score = True
 
+    def max_score(self):
+        """Grades are published on a 0..1 scale. Without this the LMS grading
+        transformer records max_score=None and leaves the video out of grades."""
+        return 1.0
+
     def resource_string(self, path):
         data = pkg_resources.resource_string(__name__, path)
         return data.decode('utf-8')
